@@ -1,5 +1,6 @@
 (ns advent.core
   (:require [clojure.java.io :as io]
+            [clojure.set :as set]
             [clojure.string :as str]))
 
 (defn get-calories-by-elf [calorie-list]
@@ -89,7 +90,60 @@
   (->> (str/split s #"\n")
        (map #(map keyword (str/split % #" ")))))
 
+;; Rucksacks, day 3
+
+(defn get-compartments [s]
+  (partition (/ (count s) 2) s))
+
+(defn parse-rucksacks [s]
+  (map get-compartments (str/split-lines s)))
+
+(defn find-shared-items [compartments]
+  (apply set/intersection (map set compartments)))
+
+(defn get-item-priority [item]
+  (let [ascii-val (int item)]
+    (- ascii-val
+       (if (<= 97 ascii-val)
+         96 ;; Lower case letters have higher ascii values
+         38))))
+
+(defn get-shared-item-priority [rucksacks]
+  (->> rucksacks
+       (map find-shared-items)
+       (mapcat #(map get-item-priority %))
+       (reduce + 0)))
+
+(defn find-badge-item-types [rucksacks]
+  (->> rucksacks
+       (partition 3)
+       (map (fn [group]
+              (->> (map (comp set #(apply concat %)) group)
+                   (apply set/intersection)
+                   first)))))
+
 (comment
+  ;; Day 3
+  (get-compartments "jqHRNqRjqzjGDLGLrsFMfFZSrLrFZsSL")
+  (def test-sacks (parse-rucksacks "vJrwpWtwJgWrhcsFMMfFFhFp\njqHRNqRjqzjGDLGLrsFMfFZSrLrFZsSL\nPmmdzqPrVvPwwTWBwg\nwMqvLMZHhHMvwLHjbvcjnnSBnvTQFn\nttgJtRGJQctTZtZT\nCrZsJsPPZsGzwwsLwLmpwMDw\n"))
+  (def sacks (parse-rucksacks (slurp (io/resource "03.txt"))))
+
+  (get-item-priority \a)
+  (get-item-priority \z)
+  (get-item-priority \A)
+  (get-item-priority \Z)
+
+  (get-shared-item-priority test-sacks)
+
+  ;; Part 1
+  (get-shared-item-priority sacks)
+
+  ;; Part 2
+  (->> sacks
+       find-badge-item-types
+       (map get-item-priority)
+       (reduce + 0))
+
   ;; Day 2
   (def test-round (parse-rps-strategy "A Y\nB X\nC Z"))
   (def rps-input (parse-rps-strategy (slurp (io/resource "02.txt"))))
