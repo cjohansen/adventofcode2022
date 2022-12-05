@@ -122,7 +122,38 @@
                    (apply set/intersection)
                    first)))))
 
+(defn parse-area-assignments [s]
+  (for [pair (str/split-lines s)]
+    (for [assignment (str/split pair #",")]
+      (let [[from to] (->> #"-"
+                           (str/split assignment)
+                           (map parse-long))]
+        (set (range from (inc to)))))))
+
+
+(defn assignments-overlap? [[elf1 elf2]]
+  (or (not-empty (set/intersection elf1 elf2))
+      (not-empty (set/intersection elf2 elf1))))
+
+(defn assignments-fully-overlap? [[elf1 elf2]]
+  (or (set/subset? elf1 elf2)
+      (set/subset? elf2 elf1)))
+
 (comment
+  ;; Day 4
+  (def test-area-assignments (parse-area-assignments "2-4,6-8\n2-3,4-5\n5-7,7-9\n2-8,3-7\n6-6,4-6\n2-6,4-8"))
+  (def area-assignments (parse-area-assignments (slurp (io/resource "04.txt"))))
+
+  ;; Part 1
+  (->> area-assignments
+       (filter assignments-fully-overlap?)
+       count)
+
+  ;; Part 2
+  (->> area-assignments
+       (filter assignments-overlap?)
+       count)
+
   ;; Day 3
   (get-compartments "jqHRNqRjqzjGDLGLrsFMfFZSrLrFZsSL")
   (def test-sacks (parse-rucksacks "vJrwpWtwJgWrhcsFMMfFFhFp\njqHRNqRjqzjGDLGLrsFMfFZSrLrFZsSL\nPmmdzqPrVvPwwTWBwg\nwMqvLMZHhHMvwLHjbvcjnnSBnvTQFn\nttgJtRGJQctTZtZT\nCrZsJsPPZsGzwwsLwLmpwMDw\n"))
