@@ -139,7 +139,110 @@
   (or (set/subset? elf1 elf2)
       (set/subset? elf2 elf1)))
 
+(defn get-crate-name [n]
+  (str (second n)))
+
+(defn parse-stack-line [line]
+  (->> (re-seq #"(.{2,3}) ?" line)
+       (map (comp not-empty str/trim second))))
+
+(defn parse-crate-stacks [s]
+  (let [[labels & rows]
+        (->> (str/split s #"\n\n")
+             first
+             str/split-lines
+             (map parse-stack-line)
+             reverse)]
+    (loop [stacks (->> labels
+                       (map (fn [label] [label []]))
+                       (into {}))
+           rows rows]
+      (if (empty? rows)
+        stacks
+        (recur
+         (->> (map vector labels (first rows))
+              (reduce (fn [stacks [label crate]]
+                        (cond-> stacks
+                          crate (update label conj (get-crate-name crate))))
+                      stacks))
+         (rest rows))))))
+
+(defn parse-crate-movements [s]
+  (->> (str/split s #"\n\n")
+       second
+       str/split-lines
+       (map (fn [instructions]
+              (let [[_ n from to] (re-find #"move (\d+) from (\d+) to (\d+)" instructions)]
+                {:n (parse-long n)
+                 :from from
+                 :to to})))))
+
+(defn rearrange-stacks [stacks movements]
+  (loop [stacks stacks
+         movements (seq movements)]
+    (if-not movements
+      stacks
+      (let [{:keys [n from to]} (first movements)]
+        (recur
+         (reduce (fn [stacks _]
+                   (-> stacks
+                       (update from #(drop-last 1 %))
+                       (update to concat (take-last 1 (get stacks from)))))
+                 stacks
+                 (range n))
+         (next movements))))))
+
+(defn rearrange-stacks-9001 [stacks movements]
+  (loop [stacks stacks
+         movements (seq movements)]
+    (if-not movements
+      stacks
+      (let [{:keys [n from to]} (first movements)]
+        (recur
+         (-> stacks
+             (update from #(drop-last n %))
+             (update to concat (take-last n (get stacks from))))
+         (next movements))))))
+
+(defn get-top-crates [stack]
+  (->> stack
+       (map (fn [[label stack]]
+              [label (last stack)]))
+       (sort-by first)
+       (map second)
+       str/join))
+
 (comment
+  ;; Day 5
+  (def test-crate-arrangements "    [D]    \n[N] [C]    \n[Z] [M] [P]\n 1   2   3 \n\nmove 1 from 2 to 1\nmove 3 from 1 to 3\nmove 2 from 2 to 1\nmove 1 from 1 to 2")
+  (def crate-arrangements (slurp (io/resource "05.txt")))
+
+  ;; Part 1
+  (get-top-crates
+   (rearrange-stacks
+    (parse-crate-stacks test-crate-arrangements)
+    (parse-crate-movements test-crate-arrangements)
+    ))
+
+  (get-top-crates
+   (rearrange-stacks
+    (parse-crate-stacks crate-arrangements)
+    (parse-crate-movements crate-arrangements)
+    ))
+
+  ;; Part 2
+  (get-top-crates
+   (rearrange-stacks-9001
+    (parse-crate-stacks test-crate-arrangements)
+    (parse-crate-movements test-crate-arrangements)
+    ))
+
+  (get-top-crates
+   (rearrange-stacks-9001
+    (parse-crate-stacks crate-arrangements)
+    (parse-crate-movements crate-arrangements)
+    ))
+
   ;; Day 4
   (def test-area-assignments (parse-area-assignments "2-4,6-8\n2-3,4-5\n5-7,7-9\n2-8,3-7\n6-6,4-6\n2-6,4-8"))
   (def area-assignments (parse-area-assignments (slurp (io/resource "04.txt"))))
