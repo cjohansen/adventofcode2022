@@ -122,6 +122,8 @@
                    (apply set/intersection)
                    first)))))
 
+;; Area assignments, day 4
+
 (defn parse-area-assignments [s]
   (for [pair (str/split-lines s)]
     (for [assignment (str/split pair #",")]
@@ -130,7 +132,6 @@
                            (map parse-long))]
         (set (range from (inc to)))))))
 
-
 (defn assignments-overlap? [[elf1 elf2]]
   (or (not-empty (set/intersection elf1 elf2))
       (not-empty (set/intersection elf2 elf1))))
@@ -138,6 +139,8 @@
 (defn assignments-fully-overlap? [[elf1 elf2]]
   (or (set/subset? elf1 elf2)
       (set/subset? elf2 elf1)))
+
+;; Crate movement, day 5
 
 (defn get-crate-name [n]
   (str (second n)))
