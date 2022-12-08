@@ -225,7 +225,83 @@
        ffirst
        (+ n)))
 
+;; Terminal shenanigans, day 7
+
+(defn parse-ls-output [line]
+  (let [[descriptor fn] (str/split line #" ")]
+    (cond-> {:path fn
+             :kind (if (= descriptor "dir") :directory :file)}
+      (not= descriptor "dir")
+      (assoc :size (parse-long descriptor)))))
+
+(defn with-fs-entry [fs path entry]
+  (update-in fs (concat path [(:path entry)]) merge (dissoc entry :kind :path)))
+
+(defn parse-terminal-log [log]
+  (loop [input (str/split-lines log)
+         fs {:path []}
+         path []]
+    (if (empty? input)
+      fs
+      (let [[line & lines] input
+            {:keys [input path fs]}
+            (or (when-let [target (second (re-find #"^\$ cd ([^\s]*)" line))]
+                  (let [path (case target
+                               "/" []
+                               ".." (drop-last 1 path)
+                               (concat path [target]))]
+                    {:input lines
+                     :fs (if (= [] path)
+                           fs
+                           (update-in fs path merge {:path path}))
+                     :path path}))
+                (when (re-find #"^\$ ls" line)
+                  {:input (drop-while #(not (re-find #"^\$" %)) lines)
+                   :fs (->> (take-while #(not (re-find #"^\$" %)) lines)
+                            (map parse-ls-output)
+                            (reduce (fn [fs entry] (with-fs-entry fs path entry)) fs))
+                   :path path}))]
+        (recur input fs path)))))
+
+(defn find-dirs [fs]
+  (->> fs
+       (tree-seq coll? identity)
+       (filter map?)
+       (remove :size)))
+
+(defn dirname [d]
+  (or (last (:path d)) "/"))
+
+(defn find-size [fs]
+  (->> fs
+       (tree-seq coll? identity)
+       (keep :size)
+       (reduce + 0)))
+
+(defn free [fs]
+  (- 70000000 (find-size fs)))
+
 (comment
+  ;; Day 7
+  (def fs (parse-terminal-log (slurp (io/resource "07-1.txt"))))
+  (def fs (parse-terminal-log (slurp (io/resource "07-2.txt"))))
+
+  ;; Part 1
+  (->> fs
+       find-dirs
+       (map find-size)
+       (filter #(<= % 100000))
+       (reduce + 0))
+
+  ;; Part 2
+  (let [required 30000000
+        needed (- required (free fs))]
+    (->> fs
+         find-dirs
+         (map find-size)
+         (filter #(<= needed %))
+         (apply min)))
+
   ;; Day 6
 
   ;; Part 1
