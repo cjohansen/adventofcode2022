@@ -281,7 +281,48 @@
 (defn free [fs]
   (- 70000000 (find-size fs)))
 
+;; Trees, day 8
+
+(defn parse-tree-map [s]
+  (->> (str/split-lines s)
+       (mapv #(mapv (comp parse-long str) %))))
+
+(defn west-of [tm x y]
+  (take x (get tm y)))
+
+(defn east-of [tm x y]
+  (drop (inc x) (get tm y)))
+
+(defn north-of [tm x y]
+  (->> (range y)
+       (map #(get-in tm [% x]))))
+
+(defn south-of [tm x y]
+  (->> (range (inc y) (count tm))
+       (map #(get-in tm [% x]))))
+
+(defn tree-visible? [tree-map x y]
+  (let [tree (get-in tree-map [y x])
+        smaller? (fn [t] (< t tree))]
+    (or (every? smaller? (west-of tree-map x y))
+        (every? smaller? (east-of tree-map x y))
+        (every? smaller? (north-of tree-map x y))
+        (every? smaller? (south-of tree-map x y)))))
+
+(defn get-visible-trees [tree-map]
+  (->> (for [y (range (count tree-map))
+             x (range (count (get tree-map y)))]
+         [x y])
+       (filter #(tree-visible? tree-map (first %) (second %)))))
+
 (comment
+  ;; Day 8
+  (def tree-map (parse-tree-map "30373\n25512\n65332\n33549\n35390"))
+  (def tree-map (parse-tree-map (slurp (io/resource "08-1.txt"))))
+
+  ;; Part 1
+  (count (get-visible-trees tree-map))
+
   ;; Day 7
   (def fs (parse-terminal-log (slurp (io/resource "07-1.txt"))))
   (def fs (parse-terminal-log (slurp (io/resource "07-2.txt"))))
