@@ -309,11 +309,26 @@
         (every? smaller? (north-of tree-map x y))
         (every? smaller? (south-of tree-map x y)))))
 
+(defn get-trees [tree-map]
+  (for [y (range (count tree-map))
+        x (range (count (get tree-map y)))]
+    [x y]))
+
 (defn get-visible-trees [tree-map]
-  (->> (for [y (range (count tree-map))
-             x (range (count (get tree-map y)))]
-         [x y])
+  (->> (get-trees tree-map)
        (filter #(tree-visible? tree-map (first %) (second %)))))
+
+(defn get-scenic-score [tree-map x y]
+  (let [tree (get-in tree-map [y x])
+        score (fn [trees]
+                (min (inc (count (take-while #(< % tree) trees)))
+                     (count trees)))]
+    (->> [(reverse (north-of tree-map x y))
+          (reverse (west-of tree-map x y))
+          (east-of tree-map x y)
+          (south-of tree-map x y)]
+         (map score)
+         (reduce * 1))))
 
 (comment
   ;; Day 8
@@ -322,6 +337,15 @@
 
   ;; Part 1
   (count (get-visible-trees tree-map))
+
+  ;; Part 2
+  (->> tree-map
+       get-visible-trees
+       (map (fn [[x y]]
+              (get-scenic-score tree-map x y)))
+       (apply max))
+
+  (get-scenic-score tree-map 2 3)
 
   ;; Day 7
   (def fs (parse-terminal-log (slurp (io/resource "07-1.txt"))))
