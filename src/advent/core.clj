@@ -215,7 +215,27 @@
        (map second)
        str/join))
 
+;; Navigation signals, day 6
+
+(defn find-packet-marker-idx [n signal]
+  (->> signal
+       (partition n 1)
+       (map-indexed vector)
+       (drop-while #(< (count (set (second %))) n))
+       ffirst
+       (+ n)))
+
 (comment
+  ;; Day 6
+
+  ;; Part 1
+  (find-packet-marker-idx 4 "zcfzfwzzqfrljwzlrfnpqdbhtmscgvjw")
+  (find-packet-marker-idx 4 (slurp (io/resource "06.txt")))
+
+  ;; Part 2
+  (find-packet-marker-idx 14 "zcfzfwzzqfrljwzlrfnpqdbhtmscgvjw")
+  (find-packet-marker-idx 14 (slurp (io/resource "06-2.txt")))
+
   ;; Day 5
   (def test-crate-arrangements "    [D]    \n[N] [C]    \n[Z] [M] [P]\n 1   2   3 \n\nmove 1 from 2 to 1\nmove 3 from 1 to 3\nmove 2 from 2 to 1\nmove 1 from 1 to 2")
   (def crate-arrangements (slurp (io/resource "05.txt")))
