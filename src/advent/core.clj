@@ -288,14 +288,15 @@
        (mapv #(mapv (comp parse-long str) %))))
 
 (defn west-of [tm x y]
-  (take x (get tm y)))
+  (reverse (take x (get tm y))))
 
 (defn east-of [tm x y]
   (drop (inc x) (get tm y)))
 
 (defn north-of [tm x y]
   (->> (range y)
-       (map #(get-in tm [% x]))))
+       (map #(get-in tm [% x]))
+       reverse))
 
 (defn south-of [tm x y]
   (->> (range (inc y) (count tm))
@@ -323,8 +324,8 @@
         score (fn [trees]
                 (min (inc (count (take-while #(< % tree) trees)))
                      (count trees)))]
-    (->> [(reverse (north-of tree-map x y))
-          (reverse (west-of tree-map x y))
+    (->> [(north-of tree-map x y)
+          (west-of tree-map x y)
           (east-of tree-map x y)
           (south-of tree-map x y)]
          (map score)
