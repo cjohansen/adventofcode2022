@@ -320,15 +320,13 @@
        (filter #(tree-visible? tree-map (first %) (second %)))))
 
 (defn get-scenic-score [tree-map x y]
-  (let [tree (get-in tree-map [y x])
-        score (fn [trees]
-                (min (inc (count (take-while #(< % tree) trees)))
-                     (count trees)))]
+  (let [tree (get-in tree-map [y x])]
     (->> [(north-of tree-map x y)
           (west-of tree-map x y)
           (east-of tree-map x y)
           (south-of tree-map x y)]
-         (map score)
+         (map (fn [trees]
+                (min (inc (count (take-while #(< % tree) trees))) (count trees))))
          (reduce * 1))))
 
 (comment
