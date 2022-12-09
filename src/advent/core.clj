@@ -329,7 +329,88 @@
                 (min (inc (count (take-while #(< % tree) trees))) (count trees))))
          (reduce * 1))))
 
+;; Ropes, day 9
+
+(defn get-distance [[ax ay] [bx by]]
+  [(- ax bx) (- ay by)])
+
+(defn move-rope-tail [head tail]
+  (let [[dx dy] (get-distance tail head)]
+    (cond
+      (and (<= (abs dx) 1) (<= (abs dy) 1))
+      tail
+
+      (and (= 0 dy) (< dx -1))
+      (update tail 0 inc)
+
+      (and (= 0 dy) (< 1 dx))
+      (update tail 0 dec)
+
+      (and (= 0 dx) (< dy -1))
+      (update tail 1 inc)
+
+      (and (= 0 dx) (< 1 dy))
+      (update tail 1 dec)
+
+      :else
+      (cond-> tail
+        (neg? dy) (update 1 inc)
+        (pos? dy) (update 1 dec)
+        (neg? dx) (update 0 inc)
+        (pos? dx) (update 0 dec)))))
+
+(defn move-rope-head [head dir]
+  (case dir
+    "U" (update head 1 dec)
+    "R" (update head 0 inc)
+    "D" (update head 1 inc)
+    "L" (update head 0 dec)))
+
+(defn move-rope [[dir n] rope tails]
+  (reduce
+   (fn [steps _]
+     (loop [rope (-> (last steps)
+                     (update :head move-rope-head dir)
+                     (assoc :tails []))
+            to-move (:tails (last steps))
+            head (:head rope)]
+       (if (empty? to-move)
+         (conj steps rope)
+         (let [tail (move-rope-tail head (first to-move))]
+           (recur
+            (update rope :tails conj tail)
+            (rest to-move)
+            tail)))))
+   [(or rope {:head [0 0]
+              :tails (repeat tails [0 0])})]
+   (range n)))
+
+(defn perform-rope-movements [movements & [tails]]
+  (reduce
+   (fn [steps movement]
+     (concat steps (move-rope movement (last steps) (or tails 1))))
+   []
+   movements))
+
+(defn parse-rope-movements [s]
+  (->> (str/split-lines s)
+       (map (fn [l]
+              (let [[_ dir n] (re-find #"(.) (\d+)" l)]
+                [dir (parse-long n)])))))
+
 (comment
+
+  ;; Day 9
+
+  (def movements (parse-rope-movements "R 4\nU 4\nL 3\nD 1\nR 4\nD 1\nL 5\nR 2"))
+  (def movements (parse-rope-movements (slurp (io/resource "09-1.txt"))))
+
+  ;; Part 1
+  (->> (perform-rope-movements movements 9)
+       (map (comp last :tails))
+       set
+       count)
+
   ;; Day 8
   (def tree-map (parse-tree-map "30373\n25512\n65332\n33549\n35390"))
   (def tree-map (parse-tree-map (slurp (io/resource "08-1.txt"))))
