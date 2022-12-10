@@ -398,7 +398,69 @@
               (let [[_ dir n] (re-find #"(.) (\d+)" l)]
                 [dir (parse-long n)])))))
 
+;; CPU, day 10
+
+(defn parse-instructions [s]
+  (->> (str/split-lines s)
+       (map (fn [line]
+              (let [[command n] (str/split line #" ")]
+                (cond-> [command]
+                  (string? n) (conj (parse-long n))))))))
+
+(defn get-instruction-cycles [x [instruction n]]
+  (case instruction
+    "noop" {:cycles [{:x x}]
+            :x x}
+    "addx" {:cycles (repeat 2 {:x x})
+            :x (+ x n)}))
+
+(defn perform-instructions [instructions]
+  (reduce
+   (fn [{:keys [cycles x]} inst]
+     (let [res (get-instruction-cycles x inst)]
+       {:cycles (concat cycles (:cycles res))
+        :x (:x res)}))
+   {:cyles []
+    :x 1}
+   instructions))
+
+(defn get-signal-strength [{:keys [cycles]} n]
+  (* n (:x (nth cycles (dec n)))))
+
+(defn render-image [instructions]
+  (let [crt-width 40]
+    (loop [output []
+           n 0
+           [{:keys [x]} & cycles] (:cycles instructions)]
+      (if (nil? x)
+        (str/join output)
+        (recur
+         (let [output (cond-> output
+                        (= 0 (mod n crt-width)) (conj "\n"))]
+           (if (<= (abs (- n x)) 1)
+             (conj output "#")
+             (conj output ".")))
+         (mod (inc n) crt-width)
+         cycles)))))
+
 (comment
+
+  ;; Day 10
+  (def instructions (parse-instructions "noop\naddx 3\naddx -5"))
+  (def instructions (parse-instructions (slurp (io/resource "10-1.txt"))))
+  (def instructions (parse-instructions (slurp (io/resource "10-2.txt"))))
+
+  ;; Part 1
+  (let [cpu (perform-instructions instructions)]
+    (->> [20 60 100 140 180 220]
+         (map #(get-signal-strength cpu %))
+         (reduce + 0)))
+
+  ;; Part 2
+  (->> instructions
+       perform-instructions
+       render-image
+       println)
 
   ;; Day 9
 
