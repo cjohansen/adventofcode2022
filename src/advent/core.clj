@@ -1,7 +1,8 @@
 (ns advent.core
   (:require [clojure.java.io :as io]
             [clojure.set :as set]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.walk :as walk]))
 
 (defn get-calories-by-elf [calorie-list]
   (for [elf (str/split calorie-list #"\n\n")]
@@ -443,7 +444,187 @@
          (mod (inc n) crt-width)
          cycles)))))
 
+;; Monkey business, day 11
+
+(defn parse-op [s]
+  (let [[a op b] (str/split s #" ")]
+    (->> (for [sym [a b]]
+           (if (= "old" sym)
+             :old
+             (parse-long sym)))
+         (apply vector op))))
+
+(defn parse-item [s]
+  (parse-long s))
+
+(defn parse-monkeys [s & [calming-factor]]
+  (vec
+   (for [lines (str/split s #"\n\n")]
+     (let [[monkey start op test iftr iff] (str/split-lines lines)
+           divisible-by (parse-long (second (re-find #"Test: divisible by (\d*)" test)))]
+       {:id (parse-long (re-find #"\d+" monkey))
+        :calming-factor (or calming-factor 1)
+        :items (mapv parse-item (re-seq #"\d+" start)) 
+        :op (parse-op (second (re-find #"Operation: new = (.*)" op)))
+        :divisible-by divisible-by
+        :then (parse-long (second (re-find #"If true: throw to monkey (.*)" iftr)))
+        :else (parse-long (second (re-find #"If false: throw to monkey (.*)" iff)))}))))
+
+(defn calculate-rest [item n]
+  (cond
+    (number? item)
+    (mod item n)
+
+    (get-in item [:rests n])
+    (get-in item [:rests n])
+
+    (vector? (:expr item))
+    (let [[op & xs] (:expr item)
+          rests (map #(calculate-rest % n) xs)]
+      (case op
+        "*"
+        (if (some #{0} rests)
+          0
+          (mod (apply * rests) n))
+
+        "+"
+        (mod (apply + rests) n)))
+
+    :else
+    (mod (:expr item) n)))
+
+(defn get-inspection-worry [item monkeys {:keys [op calming-factor]}]
+  (let [[op & args] op
+        syms (for [sym args]
+               (if (= :old sym)
+                 (if (number? (:expr item))
+                   (:expr item)
+                   item)
+                 sym))
+        expr (if (and (= "+" op)
+                      (number? (:expr item)))
+               (apply + syms)
+               (apply vector op syms))]
+    (if (= 1 calming-factor)
+      {:expr expr
+       :rests (->> (for [{:keys [divisible-by]} monkeys]
+                     [divisible-by (calculate-rest {:expr expr} divisible-by)])
+                   (into {}))}
+      {:expr ["floor" ["/" expr 3]]})))
+
+(defn compute-value [x]
+  (cond
+    (number? x)
+    x
+
+    (:factor x)
+    (compute-value (:factor x))
+
+    (coll? x)
+    (case (first x)
+      "+" (apply + (map compute-value (rest x)))
+      "*" (apply * (map compute-value (rest x)))
+      "/" (apply / (map compute-value (rest x)))
+      "floor" (long (apply compute-value (rest x))))))
+
+(defn passes-monkey-test? [{:keys [divisible-by calming-factor]} item]
+  (if (= 1 calming-factor)
+    (= 0 (get-in item [:rests divisible-by]))
+    (= 0 (mod (compute-value (:expr item)) divisible-by))))
+
+(defn get-monkey-turn [monkey monkeys]
+  (->> (:items monkey)
+       (mapcat
+        (fn [item]
+          (let [new (get-inspection-worry item monkeys monkey)
+                passed? (passes-monkey-test? monkey new)]
+            [[:inspect-item (:id monkey)]
+             [:throw-item new (:id monkey)
+              (if passed?
+                (:then monkey)
+                (:else monkey))
+              (if passed? :then :else)]])))
+       vec))
+
+(defn perform-turn [monkeys events]
+  (reduce
+   (fn [monkeys event]
+     (case (first event)
+       :throw-item (let [[_ item from-id to-id] event]
+                     (-> monkeys
+                         (update-in [to-id :items] concat [item])
+                         (update-in [from-id :items] rest)))
+       :inspect-item monkeys))
+   monkeys
+   events))
+ 
+(defn perform-round [monkeys]
+  (reduce
+   (fn [{:keys [monkeys events]} n]
+     (let [monkey (get monkeys n)
+           turn-events (get-monkey-turn monkey monkeys)]
+       {:monkeys (perform-turn monkeys turn-events)
+        :events (concat events turn-events)}))
+   {:events []
+    :monkeys monkeys}
+   (range (count monkeys))))
+
+(defn perform-rounds [monkeys n]
+  (reduce
+   (fn [{:keys [monkeys events]} n]
+     (let [res (perform-round monkeys)]
+       {:monkeys (:monkeys res)
+        :events (->> (:events res)
+                     (filter (comp #{:inspect-item} first))
+                     (concat events))}))
+   {:monkeys monkeys
+    :events []}
+   (range n)))
+
+(defn get-monkey-business-stats [events]
+  (->> events
+       (filter (comp #{:inspect-item} first))
+       (group-by second)
+       (map (juxt first (comp count second)))))
+
+(defn calculate-monkey-business [events]
+  (->> events
+       get-monkey-business-stats
+       (sort-by second)
+       (take-last 2)
+       (map second)
+       (reduce * 1)))
+
 (comment
+ 
+  ;; Day 11
+  (def monkeys (parse-monkeys (slurp (io/resource "11-1.txt")) 3))
+  (def monkeys (parse-monkeys (slurp (io/resource "11-2.txt")) 3))
+  (def monkeys (parse-monkeys (slurp (io/resource "11-1.txt"))))
+  (def monkeys (parse-monkeys (slurp (io/resource "11-2.txt"))))
+
+  (perform-round monkeys)
+
+  (-> (perform-rounds monkeys 10000)
+      :events
+      get-monkey-business-stats
+      sort
+      )
+
+  (->> (perform-rounds monkeys 20)
+       :events
+       calculate-monkey-business) ;; 10605
+
+  (time
+   (let [batch1 (perform-rounds monkeys 5000)
+         batch2 (perform-rounds (:monkeys batch1) 5000)]
+     (calculate-monkey-business
+      (concat (:events batch1)
+              (:events batch2)))))
+
+  21800916620
+  ;; 21257.803542 ms
+  ;; 20819.223084 msecs
 
   ;; Day 10
   (def instructions (parse-instructions "noop\naddx 3\naddx -5"))
