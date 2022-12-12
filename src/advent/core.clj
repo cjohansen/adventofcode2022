@@ -1,8 +1,7 @@
 (ns advent.core
   (:require [clojure.java.io :as io]
             [clojure.set :as set]
-            [clojure.string :as str]
-            [clojure.walk :as walk]))
+            [clojure.string :as str]))
 
 (defn get-calories-by-elf [calorie-list]
   (for [elf (str/split calorie-list #"\n\n")]
@@ -487,8 +486,8 @@
           0
           (mod (apply * rests) n))
 
-        "+"
-        (mod (apply + rests) n)))
+        "+")
+      (mod (apply + rests) n))
 
     :else
     (mod (:expr item) n)))
@@ -557,7 +556,7 @@
        :inspect-item monkeys))
    monkeys
    events))
- 
+
 (defn perform-round [monkeys]
   (reduce
    (fn [{:keys [monkeys events]} n]
@@ -595,8 +594,102 @@
        (map second)
        (reduce * 1)))
 
+;; Mountain climbing, day 12
+
+(defn parse-mountain-map [s]
+  (let [curr (transient {})
+        target (transient {})
+        points (mapv
+                (fn [y line]
+                  (mapv
+                   (fn [x point]
+                     (cond
+                       (= point \S) (do
+                                      (assoc! curr :x x :y y)
+                                      {:elevation (int \a)})
+                       (= point \E) (do
+                                      (assoc! target :x x :y y)
+                                      {:elevation (int \z)})
+                       :else {:elevation (int point)}))
+                   (range)
+                   (seq line)))
+                (range)
+                (str/split-lines s))]
+    {:points points
+     :start [(:x curr) (:y curr)]
+     :goal [(:x target) (:y target)]}))
+
+(defn get-point [m x y]
+  (when-let [point (get-in m [y x])]
+    (assoc point :x x :y y)))
+
+(defn available? [elevation point]
+  (<= (- (:elevation point) elevation) 1))
+
+(defn get-available-climbs [m x y]
+  (let [elevation (get-in m [y x :elevation])]
+    (->> [(get-point m x (dec y))
+          (get-point m (dec x) y)
+          (get-point m x (inc y))
+          (get-point m (inc x) y)]
+         (remove nil?)
+         (filter #(available? elevation %))
+         (map (juxt :x :y)))))
+
+(defn get-mountain-graph [m]
+  (->> (for [y (range (count m))
+             x (range (count (get m y)))]
+         [[x y] (->> (get-available-climbs m x y)
+                     (map (fn [point] [point 1]))
+                     (into {}))])
+       (into {})))
+
+(defn calculate-distances [g src]
+  (loop [unvisited (set (keys g))
+         costs (assoc (zipmap unvisited (repeat ##Inf)) src 0)
+         curr src]
+    (let [unvisited (disj unvisited curr)]
+      (if (or (empty? unvisited) (= ##Inf (get costs curr)))
+        costs
+        (let [curr-cost (get costs curr)
+              costs (reduce-kv
+                     (fn [costs neighbour n-cost]
+                       (cond-> costs
+                         (unvisited neighbour)
+                         (update neighbour min (+ n-cost curr-cost))))
+                     costs
+                     (get g curr))
+              next-vertex (apply min-key costs unvisited)]
+          (recur unvisited costs next-vertex))))))
+
+(defn get-elevation-poses [points elevation]
+  (->> (for [y (range (count points))
+             x (range (count (get points y)))]
+         {:x x :y y :elevation (get-in points [y x :elevation])})
+       (filter (comp #{elevation} :elevation))
+       (map (juxt :x :y))))
+
+(defn get-shortest-path [graph src dest]
+  (get (calculate-distances graph src) dest))
+
 (comment
- 
+
+  ;; Day 12
+  (def mountains (parse-mountain-map "Sabqponm\nabcryxxl\naccszExk\nacctuvwj\nabdefghi"))
+  (def mountains (parse-mountain-map (slurp (io/resource "12-1.txt"))))
+
+  ;; Part 1
+  (def graph (time (get-mountain-graph (:points mountains))))
+  (time (get-shortest-path graph (:start mountains) (:goal mountains)))
+  
+  ;; Part 2
+  (println
+   (time
+    (->> (get-elevation-poses (:points mountains) (int \a))
+         (pmap #(get-shortest-path graph % (:goal mountains)))
+         sort
+         first)))
+  
   ;; Day 11
   (def monkeys (parse-monkeys (slurp (io/resource "11-1.txt")) 3))
   (def monkeys (parse-monkeys (slurp (io/resource "11-2.txt")) 3))
