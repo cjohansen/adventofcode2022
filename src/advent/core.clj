@@ -671,8 +671,174 @@
 
 (defn get-shortest-path [graph src dest]
   (get (calculate-distances graph src) dest))
+;; Distress signals, Day 13
+
+(defn parse-distress-signal [s]
+  (->> #"\n\n"
+       (str/split s)
+       (map #(map read-string (str/split % #"\n")))))
+
+(declare compare-lr)
+
+(defn compare-lists [a b]
+  (loop [a a
+         b b]
+    (let [a1 (first a)
+          b1 (first b)]
+      (cond
+        (and (empty? a) (empty? b)) :undecided
+        (empty? a) :ordered
+        (empty? b) :out-of-order
+
+        :else
+        (let [res (compare-lr a1 b1)]
+          (if (= :undecided res)
+            (recur (next a) (next b))
+            res))))))
+
+(defn compare-lr [left right]
+  (cond
+    (and (number? left) (number? right))
+    (cond
+      (< left right) :ordered
+      (< right left) :out-of-order
+      (= left right) :undecided)
+
+    (and (coll? left) (coll? right))
+    (compare-lists left right)
+
+    (coll? left)
+    (compare-lists left [right])
+
+    (coll? right)
+    (compare-lists [left] right)))
+
+(defn in-order? [[left right]]
+  (= :ordered (compare-lr left right)))
+
+(defn get-decoder-key [signals divider-packets]
+  (let [xs (->> signals
+                (apply concat divider-packets)
+                (sort #(if (in-order? [%1 %2]) -1 1)))]
+    (->> divider-packets
+         (map #(inc (.indexOf xs %)))
+         (reduce * 1))))
+
+;; Falling material, day 14
+
+(defn get-rocks [points]
+  (->> (partition 2 1 points)
+       (mapcat
+        (fn [[[ax ay] [bx by]]]
+          (let [[x1 x2] (sort [ax bx])
+                [y1 y2] (sort [ay by])]
+            (for [x (range x1 (inc x2))
+                  y (range y1 (inc y2))]
+              [x y]))))
+       set))
+
+(defn parse-falling-material [s]
+  (->> (str/split-lines s)
+       (map
+        (fn [line]
+          (get-rocks
+           (for [point (str/split line #"->")]
+             (for [coord (str/split point #",")]
+               (parse-long (str/trim coord)))))))
+       (reduce set/union)))
+
+(defn sandable [blocked pos]
+  (when-not (blocked pos)
+    pos))
+
+(defn with-floor [material]
+  (let [max-y (apply max (map second material))]
+    (fn [blocked pos]
+      (when (and (not (blocked pos))
+                 (< (second pos) (+ 2 max-y)))
+        pos))))
+
+(defn down [[x y]]
+  [x (inc y)])
+
+(defn down-left [[x y]]
+  [(dec x) (inc y)])
+
+(defn down-right [[x y]]
+  [(inc x) (inc y)])
+
+(defn pour-sand [rocks origin room-for-sand?]
+  (let [max-y (apply max (map second rocks))
+        xes (map first rocks)
+        max-x (apply max xes)]
+    (loop [moving-sand origin
+           blocked rocks
+           sand #{}]
+      (if (< (+ 2 max-y) (second moving-sand))
+        sand
+        (let [move (or (room-for-sand? blocked (down moving-sand))
+                       (room-for-sand? blocked (down-left moving-sand))
+                       (room-for-sand? blocked (down-right moving-sand)))]
+          (cond
+            move
+            (recur move blocked sand)
+
+            (and (= moving-sand origin) (blocked origin))
+            (conj sand moving-sand)
+
+            :default
+            (recur origin (conj blocked moving-sand) (conj sand moving-sand))))))))
+
+(defn visualize-sand [material sand]
+  (let [xes (map first (concat material sand))
+        max-y (apply max (map second (concat material sand)))]
+    (->> (range (inc max-y))
+         (map (fn [y]
+                (->> (range (dec (apply min xes)) (+ 2 (apply max xes)))
+                     (map (fn [x]
+                            (cond
+                              (material [x y]) "#"
+                              (sand [x y]) "o"
+                              :default ".")))
+                     str/join)))
+         (str/join "\n"))))
 
 (comment
+
+  ;; Day 14
+  (def material (parse-falling-material "498,4 -> 498,6 -> 496,6\n503,4 -> 502,4 -> 502,9 -> 494,9"))
+  (def material (parse-falling-material (slurp (io/resource "14-1.txt"))))
+
+  ;; Part 1
+  (count (pour-sand material [500 0] sandable))
+
+  (println
+   (->> (pour-sand material [500 0] sandable)
+        (visualize-sand material))
+   "\n\n")
+
+  ;; Part 2
+  (println
+   (->> (pour-sand material [500 0] (with-floor material))
+        (visualize-sand material))
+   "\n\n")
+
+  (count (pour-sand material [500 0] (with-floor material)))
+
+  ;; Day 13
+  (def signals (parse-distress-signal (slurp (io/resource "13-1.txt"))))
+  (def signals (parse-distress-signal (slurp (io/resource "13-2.txt"))))
+
+  ;; Part 1
+  (->> signals
+       (map (fn [idx pair] [(inc idx) (in-order? pair)]) (range))
+       (filter (comp true? second))
+       (map first)
+       (reduce + 0)
+       )
+
+  ;; Part 2
+  (get-decoder-key signals [[[2]] [[6]]])
 
   ;; Day 12
   (def mountains (parse-mountain-map "Sabqponm\nabcryxxl\naccszExk\nacctuvwj\nabdefghi"))
